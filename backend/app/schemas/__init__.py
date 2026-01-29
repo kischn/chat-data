@@ -21,6 +21,11 @@ from app.schemas.cleaning import (
     CleaningExecuteRequest,
     CleaningExecuteResponse,
 )
+from app.schemas.chart import (
+    ChartGenerateRequest,
+    ChartGenerateResponse,
+    ChartSuggestResponse,
+)
 
 __all__ = [
     "UserCreate",
@@ -44,4 +49,7 @@ __all__ = [
     "CleaningSuggestionResponse",
     "CleaningExecuteRequest",
     "CleaningExecuteResponse",
+    "ChartGenerateRequest",
+    "ChartGenerateResponse",
+    "ChartSuggestResponse",
 ]

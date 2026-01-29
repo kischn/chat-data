@@ -1,5 +1,6 @@
 """AI Chat service for natural language data analysis."""
-from typing import Any, AsyncGenerator
+import re
+from typing import Any
 from uuid import UUID
 
 from openai import AsyncOpenAI
@@ -63,7 +64,6 @@ class AIChatService:
         user_id: UUID,
     ) -> Message:
         """Process a chat message and return AI response."""
-        # Get conversation
         conversation = await self.get_conversation(conversation_id, user_id)
         if not conversation:
             raise ValueError("Conversation not found")
@@ -84,10 +84,12 @@ class AIChatService:
         history = await self._get_history(conversation_id)
 
         # Generate response
-        response_content = await self._generate_response(
+        response_content, code_result = await self._generate_response(
             user_message=request.message,
             context=context,
             history=history,
+            execute_code=request.code_execution,
+            conversation_id=conversation_id,
         )
 
         # Save assistant message
@@ -95,6 +97,7 @@ class AIChatService:
             conversation_id=conversation_id,
             role="assistant",
             content=response_content,
+            code_result=code_result,
         )
         self.db.add(assistant_message)
         await self.db.commit()
@@ -104,12 +107,11 @@ class AIChatService:
 
     async def _build_context(self, conversation: Conversation) -> dict[str, Any]:
         """Build context for the AI from dataset metadata."""
+        from sqlalchemy import select
+
         if not conversation.dataset_id:
             return {"has_dataset": False}
 
-        from sqlalchemy import select
-
-        # Get dataset
         result = await self.db.execute(
             select(Dataset).where(Dataset.id == conversation.dataset_id)
         )
@@ -118,7 +120,6 @@ class AIChatService:
         if not dataset:
             return {"has_dataset": False}
 
-        # Get column metadata
         result = await self.db.execute(
             select(DatasetColumn)
             .where(DatasetColumn.dataset_id == conversation.dataset_id)
@@ -138,6 +139,7 @@ class AIChatService:
 
         return {
             "has_dataset": True,
+            "dataset_id": str(conversation.dataset_id),
             "dataset_name": dataset.name,
             "dataset_description": dataset.description,
             "row_count": dataset.metadata.get("row_count") if dataset.metadata else None,
@@ -165,9 +167,12 @@ class AIChatService:
         user_message: str,
         context: dict[str, Any],
         history: list[dict],
-    ) -> str:
+        execute_code: bool = True,
+        conversation_id: UUID | None = None,
+    ) -> tuple[str, dict[str, Any] | None]:
         """Generate AI response using LLM."""
-        system_prompt = self._build_system_prompt(context)
+        # Build enhanced prompt for code generation
+        system_prompt = self._build_system_prompt(context, execute_code)
 
         messages = [{"role": "system", "content": system_prompt}] + history + [
             {"role": "user", "content": user_message}
@@ -179,33 +184,97 @@ class AIChatService:
             temperature=self.temperature,
         )
 
-        return response.choices[0].message.content or ""
+        response_content = response.choices[0].message.content or ""
 
-    def _build_system_prompt(self, context: dict[str, Any]) -> str:
+        # Extract and execute code if requested
+        code_result = None
+        if execute_code and "```python" in response_content:
+            code = self._extract_code(response_content)
+            if code and context.get("has_dataset"):
+                from app.services import CodeExecutor
+                executor = CodeExecutor(self.db)
+                try:
+                    code_result = await executor.execute(
+                        code=code,
+                        dataset_id=UUID(context["dataset_id"]),
+                        conversation_id=conversation_id,
+                    )
+                    # Append result to response
+                    if code_result.get("success"):
+                        response_content += self._format_code_result(code_result)
+                except Exception as e:
+                    response_content += f"\n\n*Code execution error: {str(e)}*"
+
+        return response_content, code_result
+
+    def _extract_code(self, content: str) -> str | None:
+        """Extract Python code from markdown response."""
+        pattern = r"```python\n(.*?)\n```"
+        matches = re.findall(pattern, content, re.DOTALL)
+        return matches[0] if matches else None
+
+    def _format_code_result(self, result: dict[str, Any]) -> str:
+        """Format code execution result."""
+        parts = ["\n\n**Analysis Results:**"]
+
+        if result.get("dataframe_info"):
+            info = result["dataframe_info"]
+            parts.append(f"- Data shape: {info['shape'][0]} rows x {info['shape'][1]} columns")
+            parts.append(f"- Columns: {', '.join(info['columns'][:5])}")
+            if len(info['columns']) > 5:
+                parts.append(f"  ... and {len(info['columns']) - 5} more")
+
+        if result.get("charts"):
+            parts.append("\n**Visualizations:**")
+            for chart in result["charts"]:
+                parts.append(f"- Chart generated: {chart['type']}")
+
+        if result.get("output"):
+            parts.append(f"\n```\n{result['output']}\n```")
+
+        return "\n".join(parts)
+
+    def _build_system_prompt(self, context: dict[str, Any], execute_code: bool) -> str:
         """Build system prompt for the AI assistant."""
         prompt = """You are an expert data analysis assistant. Your role is to help users explore, clean, analyze, and visualize their datasets through natural conversation.
 
-## Guidelines
-1. Always provide helpful, accurate analysis
-2. Explain your reasoning and findings clearly
-3. Suggest relevant follow-up analyses when appropriate
-4. Use clear, concise language
-5. If you need to write code, explain what it does first
+## Your Capabilities
+1. Explore data distributions and statistics
+2. Clean and preprocess data
+3. Generate visualizations
+4. Perform statistical analysis
+5. Build predictive models
 
 ## Response Format
-- Start with a brief explanation of your analysis
-- Provide code blocks when analysis requires computation
+- Start with a brief explanation
+- Provide Python code in ```python blocks when analysis requires computation
+- Explain the code before showing it
 - Summarize key findings at the end
 
-## Safety Rules
-- Never access file system, network, or environment variables
-- Never modify the original data file
-- Handle errors gracefully with clear messages
+## Code Guidelines (when generating Python)
+- Use pandas for data manipulation
+- Use matplotlib for visualizations
+- Save charts to the output directory using plt.savefig()
+- Use clean, readable variable names
+- Add comments for complex logic
+
+"""
+
+        if execute_code:
+            prompt += """
+## Code Execution
+Your code will be executed automatically. Follow these rules:
+1. Load data using: df = pd.read_csv(dataset_path)
+2. For visualizations: plt.savefig(f"{output_dir}/chart_{conversation_id}_{i}.png")
+3. Use 'conversation_id' variable for chart naming
+4. Always use English variable names
+5. Keep code concise and focused
 
 """
 
         if context.get("has_dataset"):
             prompt += f"\n## Current Dataset Context\n"
+            prompt += f"- Dataset ID: {context['dataset_id']}\n"
             prompt += f"- Dataset: {context['dataset_name']}\n"
             if context.get("dataset_description"):
                 prompt += f"- Description: {context['dataset_description']}\n"
@@ -222,7 +291,10 @@ class AIChatService:
                     prompt += f"- Unique values: {stats['unique_count']}\n"
                 if stats.get("mean") is not None:
                     prompt += f"- Mean: {stats['mean']:.2f}, Std: {stats.get('std', 0):.2f}\n"
+                if stats.get("min") is not None:
+                    prompt += f"- Range: [{stats['min']:.2f}, {stats['max']:.2f}]\n"
 
+        prompt += "\n\nUser's message: "
         return prompt
 
     async def get_conversations_by_dataset(
