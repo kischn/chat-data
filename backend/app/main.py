@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.core.database import init_db, close_db
-from app.api import auth, datasets, teams, chat
+from app.api import auth, datasets, teams, chat, cleaning
 
 
 @asynccontextmanager

@@ -16,6 +16,11 @@ from app.schemas.conversation import (
     ChatResponse,
 )
 from app.schemas.team import TeamCreate, TeamResponse, TeamMemberResponse
+from app.schemas.cleaning import (
+    CleaningSuggestionResponse,
+    CleaningExecuteRequest,
+    CleaningExecuteResponse,
+)
 
 __all__ = [
     "UserCreate",
@@ -36,4 +41,7 @@ __all__ = [
     "TeamCreate",
     "TeamResponse",
     "TeamMemberResponse",
+    "CleaningSuggestionResponse",
+    "CleaningExecuteRequest",
+    "CleaningExecuteResponse",
 ]
