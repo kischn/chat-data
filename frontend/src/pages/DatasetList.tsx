@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Table, Button, Upload, message, Space, Tag } from 'antd'
-import { UploadOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons'
+import { UploadOutlined, EyeOutlined, DeleteOutlined, FileSearchOutlined } from '@ant-design/icons'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
 
@@ -101,6 +101,13 @@ export default function DatasetList() {
       render: (_: any, record: Dataset) => (
         <Space>
           <Button
+            icon={<FileSearchOutlined />}
+            onClick={() => navigate(`/datasets/detail/${record.id}`)}
+          >
+            View
+          </Button>
+          <Button
+            type="primary"
             icon={<EyeOutlined />}
             onClick={() => navigate(`/datasets/${record.id}`)}
           >

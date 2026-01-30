@@ -1,5 +1,5 @@
 """Chart/Visualization schemas."""
-from typing import Any, list
+from typing import Any
 
 from pydantic import BaseModel, Field
 

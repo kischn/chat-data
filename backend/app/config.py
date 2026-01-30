@@ -1,11 +1,47 @@
 """Configuration management."""
 import os
+import re
 from pathlib import Path
 from typing import Any
 
 import yaml
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
+
+
+def _expand_env_vars(value: Any) -> Any:
+    """Expand environment variables in config values."""
+    if isinstance(value, str):
+        # Handle ${VAR:-default} or ${VAR} format
+        pattern = r'\$\{([^}]+)\}'
+        match = re.search(pattern, value)
+        if match:
+            env_expr = match.group(1)
+            if ':-' in env_expr:
+                var_name, default = env_expr.split(':-', 1)
+                env_value = os.environ.get(var_name, default)
+            elif ':' in env_expr:
+                var_name, default = env_expr.split(':', 1)
+                env_value = os.environ.get(var_name, default)
+            else:
+                env_value = os.environ.get(env_expr, '')
+            return re.sub(pattern, env_value, value)
+    return value
+
+
+def _process_config(data: dict) -> dict:
+    """Recursively process config data to expand environment variables."""
+    if data is None:
+        return None
+    processed = {}
+    for key, value in data.items():
+        if isinstance(value, dict):
+            processed[key] = _process_config(value)
+        elif isinstance(value, list):
+            processed[key] = [_expand_env_vars(item) if isinstance(item, str) else item for item in value]
+        else:
+            processed[key] = _expand_env_vars(value)
+    return processed
 
 
 class AppConfig(BaseModel):
@@ -75,6 +111,9 @@ class Settings(BaseSettings):
 
         with open(config_path) as f:
             config_data = yaml.safe_load(f) or {}
+
+        # Process environment variables
+        config_data = _process_config(config_data)
 
         # Recursively build nested configs
         def build_nested(obj_class: type, data: dict) -> Any:

@@ -12,21 +12,15 @@ import {
   Avatar,
   Tooltip,
   Modal,
-  Select,
   message,
   Tag,
-  Descriptions,
-  Tabs,
 } from 'antd'
 import {
   SendOutlined,
   LeftOutlined,
   BarChartOutlined,
   LineChartOutlined,
-  ScatterChartOutlined,
-  PieChartOutlined,
   TableOutlined,
-  DeleteOutlined,
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import { conversationApi, datasetApi, chartApi } from '../api/client'
@@ -55,7 +49,6 @@ export default function Analysis() {
   const [dataset, setDataset] = useState<Dataset | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [charts, setCharts] = useState<{ id: string; type: string }[]>([])
@@ -74,7 +67,7 @@ export default function Analysis() {
     try {
       const response = await datasetApi.get(datasetId!)
       setDataset(response.data)
-    } catch (error) {
+    } catch {
       message.error('Failed to load dataset')
       navigate('/datasets')
     }
@@ -87,7 +80,7 @@ export default function Analysis() {
         title: `Analysis of ${datasetId}`,
       })
       setConversationId(response.data.id)
-    } catch (error) {
+    } catch {
       message.error('Failed to create conversation')
     }
   }
@@ -220,10 +213,14 @@ export default function Analysis() {
       <div style={{ display: 'flex', gap: 16, height: 'calc(100% - 60px)' }}>
         {/* Dataset Info Panel */}
         <Card style={{ width: 280, overflow: 'auto' }} title="Dataset Info">
-          <Descriptions size="small" column={1}>
-            <Descriptions.Item label="Type">{dataset.file_type?.toUpperCase()}</Descriptions.Item>
-            <Descriptions.Item label="Rows">{dataset.metadata?.row_count}</Descriptions.Item>
-          </Descriptions>
+          <div style={{ marginBottom: 8 }}>
+            <Text type="secondary">Type: </Text>
+            <Tag>{dataset.file_type?.toUpperCase()}</Tag>
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <Text type="secondary">Rows: </Text>
+            <Text>{dataset.metadata?.row_count}</Text>
+          </div>
 
           <Title level={5} style={{ marginTop: 16 }}>Columns</Title>
           <div style={{ maxHeight: 300, overflow: 'auto' }}>
@@ -252,12 +249,6 @@ export default function Analysis() {
               <Button
                 icon={<LineChartOutlined />}
                 onClick={() => handleChartCommand('line')}
-              />
-            </Tooltip>
-            <Tooltip title="Scatter Plot">
-              <Button
-                icon={<ScatterChartOutlined />}
-                onClick={() => handleChartCommand('scatter')}
               />
             </Tooltip>
             <Tooltip title="Histogram">
