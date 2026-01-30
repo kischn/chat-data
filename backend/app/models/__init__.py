@@ -10,14 +10,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
-    from app.models.dataset import Dataset
-    from app.models.conversation import Conversation
+    from app.models.dataset import Dataset, DatasetColumn
+    from app.models.conversation import Conversation, Message
 
 
 class User(Base):
     """User model."""
 
     __tablename__ = "users"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid4
@@ -33,7 +34,7 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Relationships
+    # Relationships - use string references to avoid circular imports
     datasets: Mapped[list["Dataset"]] = relationship(
         "Dataset", back_populates="owner", cascade="all, delete-orphan"
     )
@@ -49,6 +50,7 @@ class Team(Base):
     """Team model for collaboration."""
 
     __tablename__ = "teams"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid4
@@ -58,7 +60,7 @@ class Team(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    # Relationships
+    # Relationships - use string references to avoid circular imports
     members: Mapped[list["TeamMember"]] = relationship(
         "TeamMember", back_populates="team", cascade="all, delete-orphan"
     )
@@ -71,6 +73,7 @@ class TeamMember(Base):
     """Association table for user-team relationship."""
 
     __tablename__ = "team_members"
+    __table_args__ = {"extend_existing": True}
 
     team_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True
@@ -83,6 +86,26 @@ class TeamMember(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    # Relationships
+    # Relationships - use string references to avoid circular imports
     team: Mapped["Team"] = relationship("Team", back_populates="members")
     user: Mapped["User"] = relationship("User", back_populates="team_memberships")
+
+
+# Import additional models lazily via __getattr__ to avoid circular imports
+def __getattr__(name):
+    """Lazy import additional models to avoid circular imports."""
+    if name in ("Dataset", "DatasetColumn"):
+        from app.models import dataset
+        return getattr(dataset, name)
+    elif name in ("Conversation", "Message"):
+        from app.models import conversation
+        return getattr(conversation, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = [
+    "User",
+    "Team",
+    "TeamMember",
+    # Additional models are available via lazy import
+]

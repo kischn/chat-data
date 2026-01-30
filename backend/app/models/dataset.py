@@ -1,19 +1,23 @@
 """Dataset models."""
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, func, JSON
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models import User, Team, Conversation, Message
 
 
 class Dataset(Base):
     """Dataset model."""
 
     __tablename__ = "datasets"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[uuid4] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid4
@@ -30,7 +34,7 @@ class Dataset(Base):
         UUID(as_uuid=True), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True
     )
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    extra_metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -38,7 +42,7 @@ class Dataset(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Relationships
+    # Relationships - using string references to avoid circular imports
     owner: Mapped["User"] = relationship("User", back_populates="datasets")
     team: Mapped[Optional["Team"]] = relationship("Team", back_populates="datasets")
     columns: Mapped[list["DatasetColumn"]] = relationship(
@@ -53,6 +57,7 @@ class DatasetColumn(Base):
     """Dataset column metadata."""
 
     __tablename__ = "dataset_columns"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[uuid4] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid4
@@ -69,7 +74,3 @@ class DatasetColumn(Base):
 
     # Relationships
     dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="columns")
-
-
-# Import User and Team for relationship annotations (avoiding circular import)
-from app.models import User, Team  # noqa: E402, F401

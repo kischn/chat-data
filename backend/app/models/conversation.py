@@ -1,6 +1,6 @@
 """Conversation and message models."""
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, func, JSON
@@ -17,17 +17,18 @@ class Conversation(Base):
     """AI conversation session."""
 
     __tablename__ = "conversations"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[uuid4] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    dataset_id: Mapped[uuid4 | None] = mapped_column(
+    dataset_id: Mapped[Optional[uuid4]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("datasets.id", ondelete="SET NULL"), nullable=True
     )
     user_id: Mapped[uuid4] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -47,6 +48,7 @@ class Message(Base):
     """Individual message in a conversation."""
 
     __tablename__ = "messages"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[uuid4] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid4
@@ -56,7 +58,7 @@ class Message(Base):
     )
     role: Mapped[str] = mapped_column(String(20), nullable=False)  # 'user', 'assistant'
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    code_result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    code_result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

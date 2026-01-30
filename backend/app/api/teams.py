@@ -1,5 +1,4 @@
 """Team and collaboration endpoints."""
-from typing import list
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status

@@ -8,6 +8,7 @@ from typing import BinaryIO
 
 import pandas as pd
 from minio import Minio
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -64,7 +65,7 @@ class DatasetService:
             file_type=file_ext.lstrip("."),
             owner_id=user_id,
             is_public=is_public,
-            metadata={
+            extra_metadata={
                 "columns": metadata["columns"],
                 "row_count": metadata["row_count"],
             },

@@ -15,8 +15,14 @@ class TestAIChatService:
         session = AsyncMock()
         session.add = MagicMock()
         session.commit = AsyncMock()
-        session.flush = session.refresh = Async AsyncMock()
-       Mock()
+        session.flush = AsyncMock()
+        session.refresh = AsyncMock()
+
+        # Create a mock result for execute
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        session.execute.return_value = mock_result
+
         return session
 
     @pytest.fixture
